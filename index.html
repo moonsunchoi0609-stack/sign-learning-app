@@ -16,7 +16,7 @@
   <script>
     tailwind.config = { theme:{ extend:{ colors:{ primary:'#4f46e5', secondary:'#f97316' }}}};
 
-    // ✅ 이미지: HTML과 같은 폴더에 둔 상대경로
+    // ✅ 이미지: index.html과 같은 폴더
     const storeData = [
       { english:"DAISO",          korean:"다이소",         imageUrl:"./daiso.png" },
       { english:"SUBWAY",         korean:"써브웨이",       imageUrl:"./subway.png" },
@@ -30,14 +30,39 @@
       mode:'study',
       studyIndex:0,
       matching:{ currentQuestion:null, options:[], score:0, totalQuestions:0 },
-      quiz:{ currentQuestion:null, score:0, totalQuestions:0 }
+      quiz:{
+        currentQuestion:null,
+        maskedText:"",
+        answerChar:"",
+        score:0,
+        totalQuestions:0,
+        questions:[]
+      }
     };
 
     const appRoot = () => document.getElementById('app-content');
     function shuffleArray(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]} return a; }
-    function getMaskedWord(w){ const u=w.toUpperCase(), v=/[AEIOU]/; const idx=[]; for(let i=0;i<u.length;i++){const c=u[i]; if(/[A-Z]/.test(c)&&!v.test(c)) idx.push(i);} const arr=u.split(''); if(idx.length){arr[idx[Math.floor(Math.random()*idx.length)]]='_';} return arr.join(''); }
 
-    // — 학습 모드
+    // 🚩 단어에서 '자음' 한 글자만 '_'로 바꾸고, 그 글자를 정답으로 반환
+    function maskOneConsonant(word){
+      const upper = word.toUpperCase();
+      const vowels = /[AEIOU]/;
+      const letters = upper.split('');
+      const consonantIdx = [];
+      for(let i=0;i<letters.length;i++){
+        const ch = letters[i];
+        if(/[A-Z]/.test(ch) && !vowels.test(ch)) consonantIdx.push(i);
+      }
+      let answerChar = "";
+      if(consonantIdx.length){
+        const ri = consonantIdx[Math.floor(Math.random()*consonantIdx.length)];
+        answerChar = letters[ri];          // 정답
+        letters[ri] = '_';                 // 마스킹
+      }
+      return { masked: letters.join(''), answerChar };
+    }
+
+    // ========== 학습 모드 ==========
     function renderStudyMode(){
       const cur=storeData[appState.studyIndex];
       const next=(appState.studyIndex+1)%storeData.length;
@@ -62,7 +87,7 @@
     }
     function changeStudyIndex(i){ appState.studyIndex=i; renderStudyMode(); }
 
-    // — 짝 맞추기
+    // ========== 짝 맞추기 ==========
     function setupMatchingGame(){
       appState.matching.totalQuestions=storeData.length;
       appState.matching.score=0;
@@ -82,7 +107,7 @@
       const msg=document.getElementById('matching-message');
       if(sel===cur.english){ appState.matching.score++; msg.className='text-green-600 font-bold text-lg p-2 bg-green-100 rounded-lg'; msg.textContent='🎉 정답입니다!'; }
       else { msg.className='text-red-600 font-bold text-lg p-2 bg-red-100 rounded-lg'; msg.textContent=`❌ 정답은 ${cur.english} (${cur.korean})`; }
-      setTimeout(nextMatchingQuestion,1500);
+      setTimeout(nextMatchingQuestion,1200);
     }
     function renderMatchingGame(){
       const {currentQuestion,options,score,totalQuestions,questions}=appState.matching;
@@ -116,52 +141,98 @@
         </div>`;
     }
 
-    // — 빈칸 퀴즈
-    function setupQuizMode(){ appState.quiz.totalQuestions=storeData.length; appState.quiz.score=0; appState.quiz.questions=shuffleArray([...storeData]); nextQuizQuestion(); }
-    function nextQuizQuestion(){ if(appState.quiz.questions.length===0){ return renderQuizResults(); } appState.quiz.currentQuestion=appState.quiz.questions.pop(); renderQuizMode(); }
+    // ========== 빈칸 퀴즈(한 글자 입력) ==========
+    function setupQuizMode(){
+      appState.quiz.totalQuestions = storeData.length;
+      appState.quiz.score = 0;
+      appState.quiz.questions = shuffleArray([...storeData]);
+      nextQuizQuestion();
+    }
+
+    function nextQuizQuestion(){
+      if(appState.quiz.questions.length===0){ return renderQuizResults(); }
+      const cur = appState.quiz.questions.pop();
+      const { masked, answerChar } = maskOneConsonant(cur.english);
+      appState.quiz.currentQuestion = cur;
+      appState.quiz.maskedText = masked;
+      appState.quiz.answerChar = answerChar || ""; // 자음이 없으면 빈 문자열
+      renderQuizMode();
+    }
+
     function handleQuizSubmit(){
-      const { currentQuestion }=appState.quiz;
       const input=document.getElementById('quiz-input');
       const msg=document.getElementById('quiz-message');
-      const sub=input.value.trim().toUpperCase();
-      const ans=currentQuestion.english.toUpperCase();
-      if(sub===ans){ appState.quiz.score++; msg.className='text-green-600 font-bold text-lg p-2 bg-green-100 rounded-lg'; msg.textContent='👍 정답입니다!'; }
-      else { msg.className='text-red-600 font-bold text-lg p-2 bg-red-100 rounded-lg'; msg.textContent=`🚨 정답은 '${ans}'`; }
-      input.value=''; setTimeout(nextQuizQuestion,1500);
+      const user = (input.value||"").trim().toUpperCase();
+      const correct = appState.quiz.answerChar.toUpperCase();
+      
+      if(!user || user.length!==1 || !/[A-Z]/.test(user)){
+        msg.className='text-orange-600 font-bold text-lg p-2 bg-orange-100 rounded-lg';
+        msg.textContent='알파벳 한 글자를 입력해 주세요.';
+        return;
+      }
+
+      if(user===correct){
+        appState.quiz.score++;
+        msg.className='text-green-600 font-bold text-lg p-2 bg-green-100 rounded-lg';
+        msg.textContent='👍 정답입니다!';
+      }else{
+        msg.className='text-red-600 font-bold text-lg p-2 bg-red-100 rounded-lg';
+        msg.textContent=`🚨 정답은 '${correct}' 입니다.`;
+      }
+
+      input.value='';
+      setTimeout(nextQuizQuestion,1200);
     }
+
     function renderQuizMode(){
-      const { currentQuestion,score,totalQuestions,questions }=appState.quiz;
-      const masked=getMaskedWord(currentQuestion.english).replace(/_/g,'<span class="text-red-500 underline mx-1 font-extrabold text-2xl">?</span>');
-      const n=totalQuestions-(questions?.length??0);
+      const { currentQuestion, maskedText, score, totalQuestions, questions } = appState.quiz;
+      const n = totalQuestions - (questions?.length ?? 0);
+
+      const displayMasked = maskedText.replace(/_/g,'<span class="text-red-500 underline mx-1 font-extrabold text-2xl">?</span>');
+
       appRoot().innerHTML = `
         <div class="text-center space-y-6 p-6 bg-white rounded-xl shadow-lg">
-          <h2 class="text-3xl font-bold text-primary">📝 빈칸 채우기 퀴즈</h2>
+          <h2 class="text-3xl font-bold text-primary">📝 빈칸 채우기 퀴즈 (한 글자)</h2>
           <p class="text-xl font-semibold text-gray-700">문제 ${n} / ${totalQuestions}</p>
-          <div class="border-4 border-indigo-500 bg-indigo-50 p-6 rounded-lg shadow-inner">
-            <p class="text-2xl font-bold">${currentQuestion.korean}</p>
-            <p class="text-5xl font-extrabold tracking-widest">${masked}</p>
+
+          <div class="border-4 border-indigo-500 bg-indigo-50 p-6 rounded-lg shadow-inner space-y-2">
+            <p class="text-2xl font-bold text-gray-800">${currentQuestion.korean}</p>
+            <p class="text-sm text-gray-600">빈칸(?)에 들어갈 <strong>알파벳 한 글자</strong>를 입력하세요.</p>
+            <p class="text-5xl font-extrabold text-gray-900 tracking-widest leading-loose">${displayMasked}</p>
           </div>
+
           <div id="quiz-message" class="h-8"></div>
+
           <div class="flex gap-2 justify-center">
-            <input id="quiz-input" type="text" placeholder="정답 입력 (대문자)" class="p-3 border-2 rounded-lg text-xl uppercase text-center" onkeyup="if(event.key==='Enter')handleQuizSubmit()">
-            <button onclick="handleQuizSubmit()" class="btn-primary bg-secondary text-white py-3 px-6 rounded-lg">제출</button>
+            <input type="text" id="quiz-input" maxlength="1" pattern="[A-Za-z]" inputmode="latin" autocomplete="off"
+              oninput="this.value=this.value.toUpperCase()" onkeyup="if(event.key==='Enter') handleQuizSubmit()"
+              placeholder="한 글자" class="p-3 border-2 border-gray-300 rounded-lg text-center text-2xl uppercase focus:border-primary focus:ring-1 focus:ring-primary" />
+            <button onclick="handleQuizSubmit()" class="btn-primary bg-secondary text-white py-3 px-6 rounded-lg font-bold hover:bg-orange-600">
+              제출
+            </button>
           </div>
+
           <p class="text-sm text-gray-500 pt-4">현재 점수: ${score}점</p>
-        </div>`;
+        </div>
+      `;
       document.getElementById('quiz-input')?.focus();
     }
+
     function renderQuizResults(){
-      const {score,totalQuestions}=appState.quiz;
-      const p=Math.round((score/totalQuestions)*100);
+      const { score, totalQuestions } = appState.quiz;
+      const p = Math.round((score/totalQuestions)*100);
       appRoot().innerHTML = `
         <div class="text-center space-y-8 p-6 bg-white rounded-xl shadow-lg">
           <h2 class="text-4xl font-bold text-green-600">📝 퀴즈 완료!</h2>
           <p class="text-6xl font-extrabold text-primary">${score} / ${totalQuestions}</p>
           <p class="text-3xl font-semibold text-secondary">정답률: ${p}%</p>
+          <button onclick="setMode('quiz')" class="btn-primary bg-primary text-white py-3 px-8 rounded-full font-bold hover:bg-indigo-600">
+            다시 도전하기
+          </button>
         </div>`;
     }
 
-    // — 공통
+    // ========== 공통 ==========
     function setMode(m){ appState.mode=m; updateNavbarStyle(m); renderApp(); }
     function updateNavbarStyle(cur){
       const btns=document.querySelectorAll('#navbar button');
