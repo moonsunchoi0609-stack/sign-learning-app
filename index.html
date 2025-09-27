@@ -1,0 +1,196 @@
+<!DOCTYPE html> 
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>우리 동네 영어 간판 학습 앱</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+KR:wght@400;700&display=swap');
+    body { font-family: 'Noto Sans KR','Inter',sans-serif; background:#f7f9fc; }
+    #app { max-width:800px; min-height:100vh; }
+    .btn-primary { transition:all .2s; }
+    .btn-primary:hover { transform:translateY(-2px); box-shadow:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1); }
+    .sign-image { max-height:100px; width:auto; max-width:100%; object-fit:contain; }
+  </style>
+  <script>
+    tailwind.config = { theme:{ extend:{ colors:{ primary:'#4f46e5', secondary:'#f97316' }}}};
+
+    // ✅ 이미지: HTML과 같은 폴더에 둔 상대경로
+    const storeData = [
+      { english:"DAISO",          korean:"다이소",         imageUrl:"./daiso.png" },
+      { english:"SUBWAY",         korean:"써브웨이",       imageUrl:"./subway.png" },
+      { english:"PIZZA SCHOOL",   korean:"피자 스쿨",      imageUrl:"./pizza_school.png" },
+      { english:"MEGA COFFEE",    korean:"메가 커피",      imageUrl:"./mega_coffee.png" },
+      { english:"BURGER KING",    korean:"버거 킹",        imageUrl:"./burger_king.png" },
+      { english:"BASKIN ROBBINS", korean:"베스킨 라빈스",  imageUrl:"./baskin_robbins.png" }
+    ];
+
+    let appState = {
+      mode:'study',
+      studyIndex:0,
+      matching:{ currentQuestion:null, options:[], score:0, totalQuestions:0 },
+      quiz:{ currentQuestion:null, score:0, totalQuestions:0 }
+    };
+
+    const appRoot = () => document.getElementById('app-content');
+    function shuffleArray(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]} return a; }
+    function getMaskedWord(w){ const u=w.toUpperCase(), v=/[AEIOU]/; const idx=[]; for(let i=0;i<u.length;i++){const c=u[i]; if(/[A-Z]/.test(c)&&!v.test(c)) idx.push(i);} const arr=u.split(''); if(idx.length){arr[idx[Math.floor(Math.random()*idx.length)]]='_';} return arr.join(''); }
+
+    // — 학습 모드
+    function renderStudyMode(){
+      const cur=storeData[appState.studyIndex];
+      const next=(appState.studyIndex+1)%storeData.length;
+      appRoot().innerHTML = `
+        <div class="text-center space-y-8 p-6 bg-white rounded-xl shadow-lg">
+          <h2 class="text-3xl font-bold text-primary">👀 학습 모드: 간판 익히기</h2>
+          <p class="text-gray-600">총 ${storeData.length}개의 간판을 공부해요.</p>
+          <div class="border-4 border-indigo-200 bg-indigo-50 p-6 rounded-lg shadow-inner space-y-4">
+            <p class="text-xl text-gray-700">우리 동네 간판</p>
+            <div class="h-24 flex items-center justify-center">
+              <img src="${cur.imageUrl}" alt="${cur.english} 간판" class="sign-image rounded-lg shadow-md"/>
+            </div>
+            <p class="text-4xl font-extrabold text-gray-900">${cur.english}</p>
+            <p class="text-2xl font-semibold text-secondary">(${cur.korean})</p>
+          </div>
+          <div class="flex justify-center">
+            <button onclick="changeStudyIndex(${next})" class="btn-primary bg-primary text-white py-3 px-8 rounded-full font-bold hover:bg-indigo-600">
+              다음 간판 보기 (${appState.studyIndex+1}/${storeData.length})
+            </button>
+          </div>
+        </div>`;
+    }
+    function changeStudyIndex(i){ appState.studyIndex=i; renderStudyMode(); }
+
+    // — 짝 맞추기
+    function setupMatchingGame(){
+      appState.matching.totalQuestions=storeData.length;
+      appState.matching.score=0;
+      appState.matching.questions=shuffleArray([...storeData]);
+      nextMatchingQuestion();
+    }
+    function nextMatchingQuestion(){
+      if(appState.matching.questions.length===0){ return renderMatchingResults(); }
+      const cur=appState.matching.questions.pop();
+      appState.matching.currentQuestion=cur;
+      const wrong=shuffleArray(storeData.filter(d=>d.english!==cur.english)).slice(0,3);
+      appState.matching.options=shuffleArray([cur,...wrong]);
+      renderMatchingGame();
+    }
+    function handleMatchingAnswer(sel){
+      const cur=appState.matching.currentQuestion;
+      const msg=document.getElementById('matching-message');
+      if(sel===cur.english){ appState.matching.score++; msg.className='text-green-600 font-bold text-lg p-2 bg-green-100 rounded-lg'; msg.textContent='🎉 정답입니다!'; }
+      else { msg.className='text-red-600 font-bold text-lg p-2 bg-red-100 rounded-lg'; msg.textContent=`❌ 정답은 ${cur.english} (${cur.korean})`; }
+      setTimeout(nextMatchingQuestion,1500);
+    }
+    function renderMatchingGame(){
+      const {currentQuestion,options,score,totalQuestions,questions}=appState.matching;
+      const n=totalQuestions-(questions?.length??0);
+      const opts=options.map(o=>`
+        <button onclick="handleMatchingAnswer('${o.english}')" class="btn-primary w-full bg-white text-xl font-semibold py-3 px-4 rounded-xl border-2 border-primary hover:bg-primary hover:text-white">
+          ${o.english}
+        </button>`).join('');
+      appRoot().innerHTML = `
+        <div class="text-center space-y-6 p-6 bg-white rounded-xl shadow-lg">
+          <h2 class="text-3xl font-bold text-primary">🔗 짝 맞추기 게임</h2>
+          <p class="text-xl font-semibold text-gray-700">문제 ${n} / ${totalQuestions}</p>
+          <div class="border-4 border-secondary bg-yellow-50 p-6 rounded-lg shadow-inner">
+            <div class="h-24 flex items-center justify-center">
+              <img src="${currentQuestion.imageUrl}" alt="간판 이미지" class="sign-image rounded-lg shadow-lg"/>
+            </div>
+          </div>
+          <div id="matching-message" class="h-8"></div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">${opts}</div>
+          <p class="text-sm text-gray-500 pt-4">현재 점수: ${score}점</p>
+        </div>`;
+    }
+    function renderMatchingResults(){
+      const {score,totalQuestions}=appState.matching;
+      const p=Math.round((score/totalQuestions)*100);
+      appRoot().innerHTML = `
+        <div class="text-center space-y-8 p-6 bg-white rounded-xl shadow-lg">
+          <h2 class="text-4xl font-bold text-green-600">🏆 게임 완료!</h2>
+          <p class="text-6xl font-extrabold text-primary">${score} / ${totalQuestions}</p>
+          <p class="text-3xl font-semibold text-secondary">정답률: ${p}%</p>
+        </div>`;
+    }
+
+    // — 빈칸 퀴즈
+    function setupQuizMode(){ appState.quiz.totalQuestions=storeData.length; appState.quiz.score=0; appState.quiz.questions=shuffleArray([...storeData]); nextQuizQuestion(); }
+    function nextQuizQuestion(){ if(appState.quiz.questions.length===0){ return renderQuizResults(); } appState.quiz.currentQuestion=appState.quiz.questions.pop(); renderQuizMode(); }
+    function handleQuizSubmit(){
+      const { currentQuestion }=appState.quiz;
+      const input=document.getElementById('quiz-input');
+      const msg=document.getElementById('quiz-message');
+      const sub=input.value.trim().toUpperCase();
+      const ans=currentQuestion.english.toUpperCase();
+      if(sub===ans){ appState.quiz.score++; msg.className='text-green-600 font-bold text-lg p-2 bg-green-100 rounded-lg'; msg.textContent='👍 정답입니다!'; }
+      else { msg.className='text-red-600 font-bold text-lg p-2 bg-red-100 rounded-lg'; msg.textContent=`🚨 정답은 '${ans}'`; }
+      input.value=''; setTimeout(nextQuizQuestion,1500);
+    }
+    function renderQuizMode(){
+      const { currentQuestion,score,totalQuestions,questions }=appState.quiz;
+      const masked=getMaskedWord(currentQuestion.english).replace(/_/g,'<span class="text-red-500 underline mx-1 font-extrabold text-2xl">?</span>');
+      const n=totalQuestions-(questions?.length??0);
+      appRoot().innerHTML = `
+        <div class="text-center space-y-6 p-6 bg-white rounded-xl shadow-lg">
+          <h2 class="text-3xl font-bold text-primary">📝 빈칸 채우기 퀴즈</h2>
+          <p class="text-xl font-semibold text-gray-700">문제 ${n} / ${totalQuestions}</p>
+          <div class="border-4 border-indigo-500 bg-indigo-50 p-6 rounded-lg shadow-inner">
+            <p class="text-2xl font-bold">${currentQuestion.korean}</p>
+            <p class="text-5xl font-extrabold tracking-widest">${masked}</p>
+          </div>
+          <div id="quiz-message" class="h-8"></div>
+          <div class="flex gap-2 justify-center">
+            <input id="quiz-input" type="text" placeholder="정답 입력 (대문자)" class="p-3 border-2 rounded-lg text-xl uppercase text-center" onkeyup="if(event.key==='Enter')handleQuizSubmit()">
+            <button onclick="handleQuizSubmit()" class="btn-primary bg-secondary text-white py-3 px-6 rounded-lg">제출</button>
+          </div>
+          <p class="text-sm text-gray-500 pt-4">현재 점수: ${score}점</p>
+        </div>`;
+      document.getElementById('quiz-input')?.focus();
+    }
+    function renderQuizResults(){
+      const {score,totalQuestions}=appState.quiz;
+      const p=Math.round((score/totalQuestions)*100);
+      appRoot().innerHTML = `
+        <div class="text-center space-y-8 p-6 bg-white rounded-xl shadow-lg">
+          <h2 class="text-4xl font-bold text-green-600">📝 퀴즈 완료!</h2>
+          <p class="text-6xl font-extrabold text-primary">${score} / ${totalQuestions}</p>
+          <p class="text-3xl font-semibold text-secondary">정답률: ${p}%</p>
+        </div>`;
+    }
+
+    // — 공통
+    function setMode(m){ appState.mode=m; updateNavbarStyle(m); renderApp(); }
+    function updateNavbarStyle(cur){
+      const btns=document.querySelectorAll('#navbar button');
+      btns.forEach(b=>{
+        const m=b.getAttribute('onclick').match(/setMode\('(.*)'\)/)[1];
+        b.className = m===cur ? 'w-1/3 py-3 rounded-t-xl font-bold bg-indigo-600 text-white'
+                              : 'w-1/3 py-3 rounded-t-xl font-bold bg-gray-200 text-gray-700 hover:bg-gray-300';
+      });
+    }
+    function renderApp(){ if(appState.mode==='study') renderStudyMode(); else if(appState.mode==='matching') setupMatchingGame(); else if(appState.mode==='quiz') setupQuizMode(); }
+    window.onload=function(){
+      document.getElementById('navbar').innerHTML = `
+        <button onclick="setMode('study')">1. 학습 모드</button>
+        <button onclick="setMode('matching')">2. 짝 맞추기 게임</button>
+        <button onclick="setMode('quiz')">3. 빈칸 채우기 퀴즈</button>`;
+      setMode(appState.mode);
+    };
+    appState.mode='study';
+  </script>
+</head>
+<body class="p-4 sm:p-8">
+  <div id="app" class="mx-auto flex flex-col items-center shadow-2xl rounded-2xl bg-white overflow-hidden">
+    <header class="w-full bg-primary p-6 text-center shadow-lg">
+      <h1 class="text-4xl font-extrabold text-white">우리 동네 영어 간판 학습 앱 💡</h1>
+      <p class="text-indigo-200 mt-2 text-lg">실제 간판 사진으로 배우고 게임해보세요!</p>
+    </header>
+    <nav id="navbar" class="w-full flex justify-around bg-gray-100 shadow-md"></nav>
+    <main id="app-content" class="w-full p-6 sm:p-10 flex-grow flex items-start justify-center"></main>
+    <footer class="w-full p-4 text-center text-sm text-gray-500 border-t mt-auto">© 2025 학습용 간판 앱</footer>
+  </div>
+</body>
+</html>
